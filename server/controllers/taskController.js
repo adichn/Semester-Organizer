@@ -55,7 +55,8 @@ export async function listTasks(req, res) {
 
     res.json(tasks);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[taskController] listTasks:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -71,7 +72,8 @@ export async function getTask(req, res) {
 
     res.json(toDTO(task));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[taskController] getTask:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -121,7 +123,8 @@ export async function createTask(req, res) {
   } catch (err) {
     if (err.name === "ValidationError")
       return res.status(400).json({ error: err.message });
-    res.status(500).json({ error: err.message });
+    console.error("[taskController] createTask:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -158,7 +161,8 @@ export async function updateTask(req, res) {
   } catch (err) {
     if (err.name === "ValidationError")
       return res.status(400).json({ error: err.message });
-    res.status(500).json({ error: err.message });
+    console.error("[taskController] updateTask:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -173,6 +177,7 @@ export async function deleteTask(req, res) {
 
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[taskController] deleteTask:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }

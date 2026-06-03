@@ -25,7 +25,8 @@ export async function listYears(req, res) {
       .lean();
     res.json(years);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[yearController] listYears:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -47,7 +48,8 @@ export async function createYear(req, res) {
     const doc = await Year.create({ user: uid(req), year, semesters: [] });
     res.status(201).json(doc);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[yearController] createYear:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -69,7 +71,8 @@ export async function deleteYear(req, res) {
 
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[yearController] deleteYear:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -105,7 +108,8 @@ export async function createSemester(req, res) {
     const created = yearDoc.semesters[yearDoc.semesters.length - 1];
     res.status(201).json(created);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[yearController] createSemester:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -131,7 +135,8 @@ export async function deleteSemester(req, res) {
 
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[yearController] deleteSemester:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -168,7 +173,8 @@ export async function createCourse(req, res) {
     const created = sem.courses[sem.courses.length - 1];
     res.status(201).json(created);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[yearController] createCourse:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -201,6 +207,7 @@ export async function deleteCourse(req, res) {
 
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[yearController] deleteCourse:", err);
+    res.status(500).json({ error: "Internal server error." });
   }
 }

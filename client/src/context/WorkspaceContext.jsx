@@ -10,7 +10,7 @@ export const WORKSPACE_TYPE_META = {
     description: "Unified overview of all workspaces and events",
     color:       "#6b7280",
     taskDomain:  null,                           // no domain filter → show all tasks
-    views:       ["dashboard", "calendar"],      // no courses / resources tab
+    views:       ["dashboard", "calendar", "grades"],
     icon:        "home",
     isSystem:    true,
   },
@@ -36,7 +36,7 @@ export const WORKSPACE_TYPE_META = {
     description: "Full suite with courses, calendar, and resources",
     color:       "#22c55e",
     taskDomain:  "Academic",
-    views:       ["dashboard", "courses", "calendar", "resources"],
+    views:       ["dashboard", "courses", "calendar", "grades", "resources"],
     icon:        "book",
   },
 };

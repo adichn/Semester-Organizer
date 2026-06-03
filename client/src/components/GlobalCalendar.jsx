@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FormModal, Field, GlassButton } from "./ui";
 import { useCreateEvent, useDeleteEvent } from "../hooks/useEvents";
+import EventEditModal from "./EventEditModal";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -148,16 +149,19 @@ function CalHeader({ month, year, semester, onPrev, onNext, onToday, onAdd }) {
 
 // ── Event pill (inline in day cell) ──────────────────────────────────────────
 
-function EventPill({ event }) {
+function EventPill({ event, onEdit }) {
   const accent = TYPE_ACCENT[event.type] ?? TYPE_ACCENT.other;
   return (
-    <div
-      className="flex items-center gap-1 px-1.5 py-[3px] rounded-[5px] truncate select-none"
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onEdit(event); }}
+      className="flex items-center gap-1 px-1.5 py-[3px] rounded-[5px] truncate select-none
+                 w-full text-left hover:brightness-95 transition-all duration-100 cursor-pointer"
       style={{
         background: `${event.courseColor}18`,
         borderLeft: `2.5px solid ${event.courseColor}`,
       }}
-      title={`${event.title} · ${event.courseTitle}`}
+      title={`Edit: ${event.title} · ${event.courseTitle}`}
     >
       <span
         className="truncate text-[10.5px] font-medium leading-tight"
@@ -171,7 +175,7 @@ function EventPill({ event }) {
       >
         {event.type === "assignment" ? "asgn" : event.type}
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -179,7 +183,7 @@ function EventPill({ event }) {
 
 const MAX_PILLS = 3;
 
-function DayCell({ day, events, isToday, isSelected, isLastRow, isLastCol, onClick }) {
+function DayCell({ day, events, isToday, isSelected, isLastRow, isLastCol, onClick, onEditEvent }) {
   const visible = events.slice(0, MAX_PILLS);
   const extra   = events.length - MAX_PILLS;
 
@@ -220,7 +224,7 @@ function DayCell({ day, events, isToday, isSelected, isLastRow, isLastCol, onCli
           {visible.length > 0 && (
             <div className="flex flex-col gap-[2px] w-full mt-0.5">
               {visible.map((ev) => (
-                <EventPill key={ev._id} event={ev} />
+                <EventPill key={ev._id} event={ev} onEdit={onEditEvent} />
               ))}
               {extra > 0 && (
                 <span className="text-[10px] text-gray-400 px-1 leading-tight">
@@ -237,7 +241,17 @@ function DayCell({ day, events, isToday, isSelected, isLastRow, isLastCol, onCli
 
 // ── Detail panel event card ───────────────────────────────────────────────────
 
-function EventCard({ event, onDelete, deleting }) {
+function PencilIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function EventCard({ event, onDelete, deleting, onEdit }) {
   const accent = TYPE_ACCENT[event.type] ?? TYPE_ACCENT.other;
 
   return (
@@ -284,6 +298,18 @@ function EventCard({ event, onDelete, deleting }) {
         </div>
       </div>
 
+      {/* Edit button */}
+      <button
+        onClick={onEdit}
+        className="opacity-0 group-hover:opacity-100 w-[20px] h-[20px] flex items-center
+                   justify-center text-gray-400 hover:text-indigo-500 rounded-full
+                   hover:bg-indigo-50 transition-all cursor-pointer shrink-0 mt-[1px]"
+        aria-label="Edit event"
+      >
+        <PencilIcon />
+      </button>
+
+      {/* Delete button */}
       <button
         onClick={onDelete}
         disabled={deleting}
@@ -308,6 +334,8 @@ export default function GlobalCalendar({ courses = [], semester }) {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDay, setSelectedDay] = useState(null);
+
+  const [editingEvent, setEditingEvent] = useState(null); // enriched event object
 
   const [showAdd,  setShowAdd]  = useState(false);
   const [evTitle,  setEvTitle]  = useState("");
@@ -469,6 +497,7 @@ export default function GlobalCalendar({ courses = [], semester }) {
                         isLastRow={wi === weeks.length - 1}
                         isLastCol={di === 6}
                         onClick={() => day && setSelectedDay(day === selectedDay ? null : day)}
+                        onEditEvent={setEditingEvent}
                       />
                     );
                   })}
@@ -551,6 +580,7 @@ export default function GlobalCalendar({ courses = [], semester }) {
                         event={ev}
                         deleting={deleteEvent.isPending && deleteEvent.variables?.eventId === ev._id}
                         onDelete={() => deleteEvent.mutate({ courseId: ev.courseId, eventId: ev._id })}
+                        onEdit={() => setEditingEvent(ev)}
                       />
                     ))}
                   </div>
@@ -577,6 +607,14 @@ export default function GlobalCalendar({ courses = [], semester }) {
           ))}
         </div>
       )}
+
+      {/* Edit Event modal */}
+      <EventEditModal
+        event={editingEvent}
+        courseId={editingEvent?.courseId}
+        isOpen={!!editingEvent}
+        onClose={() => setEditingEvent(null)}
+      />
 
       {/* Add Event modal */}
       <FormModal

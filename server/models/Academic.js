@@ -42,6 +42,12 @@ const EventSchema = new Schema(
       default: "todo",
     },
     completed: { type: Boolean, default: false },
+    // Grade weight: how much this item is worth in the final course grade (0–100 %)
+    gradeWeight:  { type: Number, min: 0, max: 100, default: null },
+    // Raw points earned and total possible — e.g. 36 / 40.
+    // Null until the user grades the item. Percentage is computed as earnedPoints/totalPoints*100.
+    earnedPoints: { type: Number, min: 0, default: null },
+    totalPoints:  { type: Number, min: 0, default: null },
   },
   { _id: true, timestamps: true }
 );

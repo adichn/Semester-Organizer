@@ -16,14 +16,22 @@ function findCourse(yearDoc, courseId) {
 }
 
 function toDTO(ev) {
+  const ep = ev.earnedPoints ?? null;
+  const tp = ev.totalPoints  ?? null;
+  // Percentage for convenience: earnedPoints / totalPoints * 100, rounded to 2 dp
+  const earnedPct = (ep != null && tp > 0) ? Math.round(ep / tp * 10000) / 100 : null;
   return {
-    _id:         ev._id,
-    title:       ev.title,
-    description: ev.description ?? "",
-    date:        ev.date,
-    type:        ev.type,
-    status:      ev.status ?? (ev.completed ? "completed" : "todo"),
-    completed:   ev.completed ?? false,
+    _id:          ev._id,
+    title:        ev.title,
+    description:  ev.description ?? "",
+    date:         ev.date,
+    type:         ev.type,
+    status:       ev.status ?? (ev.completed ? "completed" : "todo"),
+    completed:    ev.completed ?? false,
+    gradeWeight:  ev.gradeWeight  ?? null,
+    earnedPoints: ep,
+    totalPoints:  tp,
+    earnedPct,                  // derived — frontend uses this for grade math
   };
 }
 
@@ -72,7 +80,7 @@ export async function createEvent(req, res) {
     return res.status(201).json({ event: toDTO(saved) });
   } catch (err) {
     console.error("[eventController] createEvent:", err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -88,7 +96,7 @@ export async function updateEvent(req, res) {
     if (!mongoose.isValidObjectId(courseId) || !mongoose.isValidObjectId(eventId))
       return res.status(400).json({ error: "Invalid id." });
 
-    const { title, date, type, description, status, completed } = req.body;
+    const { title, date, type, description, status, completed, gradeWeight, earnedPoints, totalPoints } = req.body;
 
     if (type    && !VALID_TYPES.includes(type))
       return res.status(400).json({ error: `type must be one of: ${VALID_TYPES.join(", ")}.` });
@@ -109,6 +117,9 @@ export async function updateEvent(req, res) {
       $set[`${prefix}.completed`] = completed;
       $set[`${prefix}.status`]    = completed ? "completed" : "todo";
     }
+    if (gradeWeight  !== undefined) $set[`${prefix}.gradeWeight`]  = gradeWeight  === null ? null : Number(gradeWeight);
+    if (earnedPoints !== undefined) $set[`${prefix}.earnedPoints`] = earnedPoints === null ? null : Number(earnedPoints);
+    if (totalPoints  !== undefined) $set[`${prefix}.totalPoints`]  = totalPoints  === null ? null : Number(totalPoints);
 
     if (!Object.keys($set).length)
       return res.status(400).json({ error: "Nothing to update." });
@@ -138,7 +149,7 @@ export async function updateEvent(req, res) {
     return res.json({ event: toDTO(ev) });
   } catch (err) {
     console.error("[eventController] updateEvent:", err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -193,7 +204,7 @@ export async function batchCreateEvents(req, res) {
     return res.status(201).json({ created: created.map(toDTO) });
   } catch (err) {
     console.error("[eventController] batchCreateEvents:", err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Internal server error." });
   }
 }
 
@@ -220,6 +231,6 @@ export async function deleteEvent(req, res) {
     return res.json({ ok: true });
   } catch (err) {
     console.error("[eventController] deleteEvent:", err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Internal server error." });
   }
 }

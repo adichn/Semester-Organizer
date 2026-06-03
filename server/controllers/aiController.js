@@ -119,6 +119,6 @@ export async function queryAI(req, res) {
     });
   } catch (err) {
     console.error("[aiController] queryAI error:", err);
-    return res.status(500).json({ error: err.message ?? "Internal server error." });
+    return res.status(500).json({ error: "Internal server error." });
   }
 }

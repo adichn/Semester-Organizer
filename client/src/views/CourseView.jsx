@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import GlassCard       from "../components/GlassCard";
 import ProgressBar     from "../components/ProgressBar";
@@ -12,6 +12,7 @@ import {
 } from "../hooks/useAssignments";
 import { useDeleteEvent } from "../hooks/useEvents";
 import { useDeleteCourse } from "../hooks/useAcademic";
+import EventEditModal     from "../components/EventEditModal";
 
 // ── Static config ─────────────────────────────────────────────────────────────
 
@@ -76,9 +77,19 @@ function TrashIcon() {
   );
 }
 
+function PencilIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
 // ── EventRow — event list item with inline delete confirm ────────────────────
 
-function EventRow({ ev, courseId, style, isPast = false }) {
+function EventRow({ ev, courseId, style, isPast = false, onEdit }) {
   const [confirming, setConfirming] = useState(false);
   const { mutate: deleteEvent, isPending } = useDeleteEvent();
 
@@ -119,13 +130,65 @@ function EventRow({ ev, courseId, style, isPast = false }) {
 
       {/* Type pill or relative date */}
       {isPast ? (
-        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${style(ev.type).pill} opacity-70`}>
-          {ev.type}
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {(() => {
+            const pct = resolveEarnedPct(ev);
+            return pct != null ? (
+              <span className={[
+                "text-[11px] font-semibold px-2 py-0.5 rounded-md",
+                pct >= 90 ? "bg-emerald-100 text-emerald-700" :
+                pct >= 80 ? "bg-sky-100 text-sky-700" :
+                pct >= 70 ? "bg-amber-100 text-amber-700" :
+                pct >= 60 ? "bg-orange-100 text-orange-700" :
+                "bg-rose-100 text-rose-700",
+              ].join(" ")}>
+                {ev.earnedPoints != null && ev.totalPoints != null
+                  ? `${ev.earnedPoints}/${ev.totalPoints}`
+                  : `${pct}%`}
+              </span>
+            ) : null;
+          })()}
+          {resolveEarnedPct(ev) == null && (
+            ev.type === "assignment" || ev.type === "exam" ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(ev); }}
+                className="text-[11px] font-medium px-2 py-0.5 rounded-md
+                           bg-gray-100 text-gray-400 hover:bg-indigo-50 hover:text-indigo-500
+                           transition-colors cursor-pointer border border-dashed border-gray-200
+                           hover:border-indigo-200"
+              >
+                + grade
+              </button>
+            ) : (
+              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${style(ev.type).pill} opacity-70`}>
+                {ev.type}
+              </span>
+            )
+          )}
+          {ev.gradeWeight != null && (
+            <span className="text-[10px] text-gray-400">{ev.gradeWeight}%</span>
+          )}
+        </div>
       ) : (
         <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${style(ev.type).pill}`}>
           {relativeDate(ev.date)}
         </span>
+      )}
+
+      {/* Edit button — always visible on hover when not confirming */}
+      {!confirming && (
+        <motion.button
+          onClick={(e) => { e.stopPropagation(); onEdit(ev); }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0 }}
+          whileHover={{ opacity: 1 }}
+          className="opacity-0 group-hover:opacity-100 shrink-0 p-1 rounded-[6px]
+                     text-gray-400 hover:text-indigo-500 hover:bg-indigo-50
+                     transition-all duration-150 cursor-pointer"
+          title="Edit event"
+        >
+          <PencilIcon />
+        </motion.button>
       )}
 
       {/* Delete — inline confirm */}
@@ -455,13 +518,366 @@ function ResourcesTab({ course }) {
   return <ResourceManager course={course} />;
 }
 
+// ── Grade math (mirrors GradesView logic) ────────────────────────────────────
+
+const GRADED_TYPES = new Set(["assignment", "exam"]);
+
+/**
+ * Resolve earnedPct for an event.
+ * The years query returns raw DB docs (no earnedPct), so we derive it from
+ * earnedPoints / totalPoints when the pre-computed field is absent.
+ */
+function resolveEarnedPct(e) {
+  if (e.earnedPct != null) return e.earnedPct;
+  if (e.earnedPoints != null && e.totalPoints != null && e.totalPoints > 0)
+    return Math.round(e.earnedPoints / e.totalPoints * 10000) / 100;
+  return null;
+}
+
+function letterGrade(pct) {
+  if (pct == null) return "–";
+  if (pct >= 93) return "A";  if (pct >= 90) return "A−";
+  if (pct >= 87) return "B+"; if (pct >= 83) return "B";
+  if (pct >= 80) return "B−"; if (pct >= 77) return "C+";
+  if (pct >= 73) return "C";  if (pct >= 70) return "C−";
+  if (pct >= 67) return "D+"; if (pct >= 63) return "D";
+  if (pct >= 60) return "D−"; return "F";
+}
+
+function gradeColors(pct) {
+  if (pct == null) return { text: "#9ca3af", bg: "#f3f4f6" };
+  if (pct >= 90)  return { text: "#059669", bg: "#d1fae5" };
+  if (pct >= 80)  return { text: "#0284c7", bg: "#e0f2fe" };
+  if (pct >= 70)  return { text: "#d97706", bg: "#fef3c7" };
+  if (pct >= 60)  return { text: "#ea580c", bg: "#ffedd5" };
+  return             { text: "#dc2626", bg: "#fee2e2" };
+}
+
+function computeCourseGrades(events) {
+  const assessments = events.filter((e) => GRADED_TYPES.has(e.type));
+  const withWeight  = assessments.filter((e) => e.gradeWeight != null && e.gradeWeight > 0);
+  const graded      = withWeight.filter((e) => resolveEarnedPct(e) != null);
+  const ungraded    = withWeight.filter((e) => resolveEarnedPct(e) == null);
+
+  const totalWeight    = withWeight.reduce((s, e) => s + e.gradeWeight, 0);
+  const gradedWeight   = graded.reduce((s, e)   => s + e.gradeWeight, 0);
+  // Contribution of graded items toward the final 100% grade
+  const weightedPoints = graded.reduce((s, e)   => s + (resolveEarnedPct(e) / 100) * e.gradeWeight, 0);
+  const ungradedWeight = ungraded.reduce((s, e) => s + e.gradeWeight, 0);
+  // Weight not yet assigned to any event — e.g. future assessments not yet added
+  const unassignedWeight = Math.max(0, 100 - totalWeight);
+
+  // Raw marks across all graded items (for the Earned cell display)
+  const sumEarnedPoints = graded.reduce((s, e) => s + (e.earnedPoints ?? 0), 0);
+  const sumTotalPoints  = graded.reduce((s, e) => s + (e.totalPoints  ?? 0), 0);
+
+  const r = (n) => Math.round(n * 10) / 10;
+  return {
+    // Average score on items already returned/graded (ignores ungraded weight)
+    earned:   gradedWeight > 0 ? r((weightedPoints / gradedWeight)  * 100) : null,
+    // Actual standing: locked scores + 0 on everything else
+    current:  totalWeight  > 0 ? r((weightedPoints / totalWeight)   * 100) : null,
+    // Best case: locked scores + 100% on ungraded items + 100% on not-yet-added course weight
+    possible: r(Math.min(100, weightedPoints + ungradedWeight + unassignedWeight)),
+    gradedCount:    graded.length,
+    weightedCount:  withWeight.length,
+    totalWeight,
+    sumEarnedPoints,
+    sumTotalPoints,
+  };
+}
+
+// ── Grade summary cell ────────────────────────────────────────────────────────
+
+/**
+ * rawMarks: optional "X / Y" string shown instead of percentage (used for Earned cell).
+ * value:    still used for background colour even when rawMarks is shown.
+ */
+function GradeSummaryCell({ label, value, sublabel, rawMarks }) {
+  const color = gradeColors(value);
+  return (
+    <div className="flex flex-col items-center gap-1 px-3 py-3 rounded-[12px]"
+         style={{ background: color.bg }}>
+      <span className="text-[9px] font-semibold text-gray-500 uppercase"
+            style={{ letterSpacing: "0.07em" }}>
+        {label}
+      </span>
+      <div className="flex items-baseline gap-1 flex-wrap justify-center">
+        {rawMarks ? (
+          <span className="text-[18px] font-bold leading-none tabular-nums"
+                style={{ color: color.text, letterSpacing: "-0.02em" }}>
+            {rawMarks}
+          </span>
+        ) : (
+          <span className="text-[20px] font-bold leading-none"
+                style={{ color: color.text, letterSpacing: "-0.03em" }}>
+            {value != null ? `${value}%` : "–"}
+          </span>
+        )}
+        {value != null && (
+          <span className="text-[11px] font-semibold" style={{ color: color.text }}>
+            {rawMarks ? `${value}%` : letterGrade(value)}
+          </span>
+        )}
+      </div>
+      {sublabel && (
+        <span className="text-[9px] text-gray-400 text-center leading-tight">{sublabel}</span>
+      )}
+    </div>
+  );
+}
+
+// ── Grade item row ────────────────────────────────────────────────────────────
+
+function GradeItemRow({ ev, courseId, onEdit, dimmed = false }) {
+  const earnedPct = resolveEarnedPct(ev);
+  const color = gradeColors(earnedPct);
+  const isPast = new Date(ev.date) <= new Date();
+
+  return (
+    <motion.div
+      variants={listItem}
+      className={[
+        "flex items-center gap-3 px-4 py-3 group",
+        dimmed ? "opacity-55" : "",
+      ].join(" ")}
+    >
+      {/* Type dot */}
+      <span className={`w-2 h-2 rounded-full shrink-0 mt-0.5 ${(EVENT_STYLE[ev.type] ?? EVENT_STYLE.other).dot}`} />
+
+      {/* Title + meta */}
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-medium text-gray-900 leading-tight truncate"
+           style={{ letterSpacing: "-0.011em" }}>
+          {ev.title}
+        </p>
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <span className="text-[11px] text-gray-400">{formatDate(ev.date)}</span>
+          {ev.gradeWeight != null && (
+            <span className="text-[10px] font-semibold bg-indigo-50 text-indigo-400
+                             px-1.5 py-0.5 rounded-[5px]">
+              {ev.gradeWeight}% weight
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Score badge */}
+      <div className="shrink-0 flex items-center gap-2">
+        {earnedPct != null ? (
+          <div className="flex items-center gap-1.5">
+            {ev.earnedPoints != null && ev.totalPoints != null && (
+              <span className="text-[12px] text-gray-400 tabular-nums">
+                {ev.earnedPoints}/{ev.totalPoints}
+              </span>
+            )}
+            <span
+              className="text-[13px] font-bold px-2.5 py-0.5 rounded-[8px] tabular-nums"
+              style={{ color: color.text, background: color.bg }}
+            >
+              {earnedPct}% <span className="text-[11px]">{letterGrade(earnedPct)}</span>
+            </span>
+          </div>
+        ) : isPast ? (
+          <button
+            onClick={() => onEdit(ev)}
+            className="text-[11px] font-medium px-2.5 py-1 rounded-[8px]
+                       bg-gray-50 text-gray-400 hover:bg-indigo-50 hover:text-indigo-500
+                       transition-colors cursor-pointer border border-dashed border-gray-200
+                       hover:border-indigo-200"
+          >
+            + enter score
+          </button>
+        ) : (
+          <span className="text-[11px] text-gray-300 font-medium">
+            {!isPast ? relativeDate(ev.date) : "—"}
+          </span>
+        )}
+
+        {/* Edit button — always visible */}
+        <button
+          onClick={() => onEdit(ev)}
+          className="p-1.5 rounded-[7px] text-gray-400 hover:text-indigo-500
+                     hover:bg-indigo-50 transition-all duration-150 cursor-pointer
+                     opacity-0 group-hover:opacity-100"
+          title="Edit"
+        >
+          <PencilIcon />
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Grades tab ────────────────────────────────────────────────────────────────
+
+function GradesTab({ course, onEdit }) {
+  const now = new Date();
+
+  const assessments = useMemo(
+    () => course.events.filter((e) => GRADED_TYPES.has(e.type)),
+    [course.events]
+  );
+
+  const grades = useMemo(() => computeCourseGrades(course.events), [course.events]);
+
+  // Four buckets — use resolveEarnedPct so raw DB docs (no earnedPct field) work too
+  const scored   = useMemo(() =>
+    assessments.filter((e) => resolveEarnedPct(e) != null)
+               .sort((a, b) => new Date(b.date) - new Date(a.date)),
+    [assessments]
+  );
+
+  const awaitingScore = useMemo(() =>
+    assessments.filter((e) => resolveEarnedPct(e) == null && new Date(e.date) <= now)
+               .sort((a, b) => new Date(b.date) - new Date(a.date)),
+    [assessments]
+  );
+
+  const upcoming = useMemo(() =>
+    assessments.filter((e) => resolveEarnedPct(e) == null && new Date(e.date) > now)
+               .sort((a, b) => new Date(a.date) - new Date(b.date)),
+    [assessments]
+  );
+
+  const unweighted = useMemo(() =>
+    assessments.filter((e) => e.gradeWeight == null || e.gradeWeight === 0),
+    [assessments]
+  );
+
+  const hasAny = assessments.length > 0;
+
+  if (!hasAny) {
+    return (
+      <GlassCard variant="subtle" className="flex flex-col items-center py-12 text-center">
+        <span className="text-3xl mb-3">📊</span>
+        <p className="text-[14px] font-medium text-gray-700">No assessments yet</p>
+        <p className="text-[12px] text-gray-400 mt-1">
+          Add assignments or exams in the Events tab, then set weights and scores here.
+        </p>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Grade summary ──────────────────────────────────────────────────── */}
+      {grades.totalWeight > 0 ? (
+        <GlassCard variant="elevated" className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase"
+               style={{ letterSpacing: "0.06em" }}>
+              Grade Summary
+            </p>
+            <span className="text-[11px] text-gray-400">
+              {grades.gradedCount} of {grades.weightedCount} weighted items scored
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2.5">
+            <GradeSummaryCell
+              label="Earned"
+              value={grades.earned}
+              sublabel="avg on returned work"
+              rawMarks={
+                grades.sumTotalPoints > 0
+                  ? `${grades.sumEarnedPoints} / ${grades.sumTotalPoints}`
+                  : null
+              }
+            />
+            <GradeSummaryCell label="Current"  value={grades.current}  sublabel="weighted so far"  />
+            <GradeSummaryCell label="Possible" value={grades.possible} sublabel="best case remaining" />
+          </div>
+        </GlassCard>
+      ) : (
+        <div
+          className="px-4 py-3 rounded-[12px] text-[12px] text-amber-700 font-medium"
+          style={{ background: "#fef3c7", border: "1px solid #fde68a" }}
+        >
+          Set a weight on your assessments to see grade projections.
+        </div>
+      )}
+
+      {/* ── Scored ────────────────────────────────────────────────────────── */}
+      {scored.length > 0 && (
+        <section>
+          <p className="text-[10px] font-semibold text-emerald-600 uppercase mb-2"
+             style={{ letterSpacing: "0.07em" }}>
+            Graded · {scored.length}
+          </p>
+          <GlassCard variant="elevated" className="divide-y divide-gray-100/70 overflow-hidden">
+            <motion.div variants={listStagger} initial="hidden" animate="show">
+              {scored.map((ev) => (
+                <GradeItemRow key={ev._id} ev={ev} courseId={course._id} onEdit={onEdit} />
+              ))}
+            </motion.div>
+          </GlassCard>
+        </section>
+      )}
+
+      {/* ── Awaiting score ────────────────────────────────────────────────── */}
+      {awaitingScore.length > 0 && (
+        <section>
+          <p className="text-[10px] font-semibold text-amber-600 uppercase mb-2"
+             style={{ letterSpacing: "0.07em" }}>
+            Awaiting Score · {awaitingScore.length}
+          </p>
+          <GlassCard className="divide-y divide-gray-100/60 overflow-hidden">
+            <motion.div variants={listStagger} initial="hidden" animate="show">
+              {awaitingScore.map((ev) => (
+                <GradeItemRow key={ev._id} ev={ev} courseId={course._id} onEdit={onEdit} />
+              ))}
+            </motion.div>
+          </GlassCard>
+        </section>
+      )}
+
+      {/* ── Upcoming ──────────────────────────────────────────────────────── */}
+      {upcoming.length > 0 && (
+        <section>
+          <p className="text-[10px] font-semibold text-indigo-500 uppercase mb-2"
+             style={{ letterSpacing: "0.07em" }}>
+            Upcoming · {upcoming.length}
+          </p>
+          <GlassCard className="divide-y divide-gray-100/60 overflow-hidden">
+            <motion.div variants={listStagger} initial="hidden" animate="show">
+              {upcoming.map((ev) => (
+                <GradeItemRow key={ev._id} ev={ev} courseId={course._id} onEdit={onEdit} dimmed />
+              ))}
+            </motion.div>
+          </GlassCard>
+        </section>
+      )}
+
+      {/* ── Unweighted ────────────────────────────────────────────────────── */}
+      {unweighted.length > 0 && (
+        <section>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase mb-2"
+             style={{ letterSpacing: "0.07em" }}>
+            No Weight Set · {unweighted.length}
+          </p>
+          <GlassCard variant="subtle" className="divide-y divide-gray-100/50 overflow-hidden">
+            <motion.div variants={listStagger} initial="hidden" animate="show">
+              {unweighted.map((ev) => (
+                <GradeItemRow key={ev._id} ev={ev} courseId={course._id} onEdit={onEdit} dimmed />
+              ))}
+            </motion.div>
+          </GlassCard>
+        </section>
+      )}
+
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-const TABS = ["assignments", "events", "resources"];
+const TABS = ["assignments", "events", "grades", "resources"];
 
 export default function CourseView({ course, semester, yearId, onBack }) {
-  const [tab,        setTab]        = useState("assignments");
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [tab,          setTab]          = useState("assignments");
+  const [deleteOpen,   setDeleteOpen]   = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null); // { ev, courseId }
   const { mutateAsync: deleteCourse, isPending: isDeleting } = useDeleteCourse();
   const now = new Date();
 
@@ -604,7 +1020,8 @@ export default function CourseView({ course, semester, yearId, onBack }) {
                 <GlassCard variant="elevated" className="divide-y divide-gray-100/70">
                   <motion.ul variants={listStagger} initial="hidden" animate="show">
                     {upcoming.map((ev) => (
-                      <EventRow key={ev._id} ev={ev} courseId={course._id} style={style} />
+                      <EventRow key={ev._id} ev={ev} courseId={course._id} style={style}
+                        onEdit={(e) => setEditingEvent({ ev: e, courseId: course._id })} />
                     ))}
                   </motion.ul>
                 </GlassCard>
@@ -619,12 +1036,22 @@ export default function CourseView({ course, semester, yearId, onBack }) {
                 <GlassCard className="divide-y divide-gray-100/50">
                   <motion.ul variants={listStagger} initial="hidden" animate="show">
                     {past.map((ev) => (
-                      <EventRow key={ev._id} ev={ev} courseId={course._id} style={style} isPast />
+                      <EventRow key={ev._id} ev={ev} courseId={course._id} style={style} isPast
+                        onEdit={(e) => setEditingEvent({ ev: e, courseId: course._id })} />
                     ))}
                   </motion.ul>
                 </GlassCard>
               </section>
             )}
+          </motion.div>
+        )}
+
+        {tab === "grades" && (
+          <motion.div key="grades" {...tabFade}>
+            <GradesTab
+              course={course}
+              onEdit={(ev) => setEditingEvent({ ev, courseId: course._id })}
+            />
           </motion.div>
         )}
 
@@ -635,6 +1062,13 @@ export default function CourseView({ course, semester, yearId, onBack }) {
         )}
       </AnimatePresence>
     </div>
+
+    <EventEditModal
+      event={editingEvent?.ev}
+      courseId={editingEvent?.courseId}
+      isOpen={!!editingEvent}
+      onClose={() => setEditingEvent(null)}
+    />
 
     <DeleteModal
       isOpen={deleteOpen}

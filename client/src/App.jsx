@@ -9,6 +9,7 @@ import CourseView      from "./views/CourseView";
 import DashboardView   from "./views/DashboardView";
 import ResourcesView   from "./views/ResourcesView";
 import SettingsView    from "./views/SettingsView";
+import GradesView      from "./views/GradesView";
 import GlobalCalendar  from "./components/GlobalCalendar";
 import LoginPage       from "./pages/LoginPage";
 import CommandMenu     from "./components/CommandMenu";
@@ -163,14 +164,16 @@ function AppShell({ authUser, onLogout, dark, onToggleTheme }) {
   const isCalendar  = activeNav === "calendar";
   const isResources = activeNav === "resources";
   const isSettings  = activeNav === "settings";
+  const isGrades    = activeNav === "grades";
   // "courses" nav + any other unknown nav → breadcrumb view
-  const isBreadcrumb = !isDashboard && !isCalendar && !isResources && !isSettings;
+  const isBreadcrumb = !isDashboard && !isCalendar && !isResources && !isSettings && !isGrades;
 
   // AnimatePresence key — change triggers a cross-fade / slide
   const pageKey = isDashboard  ? "dash"
     : isCalendar               ? `cal-${activeSemesterId ?? "none"}`
     : isResources              ? "resources"
     : isSettings               ? "settings"
+    : isGrades                 ? "grades"
     : page === "year"          ? `year-${activeYearId}`
     : page === "semester"      ? `sem-${activeSemesterId}`
     :                            `crs-${activeCourseId}`;
@@ -262,6 +265,18 @@ function AppShell({ authUser, onLogout, dark, onToggleTheme }) {
               className="absolute inset-0 overflow-y-auto p-10"
             >
               <SettingsView user={authUser} onLogout={onLogout} />
+            </motion.div>
+          )}
+
+          {/* ── Grades ───────────────────────────────────────────────────── */}
+          {isGrades && (
+            <motion.div
+              key={pageKey}
+              variants={fadeVariants}
+              initial="initial" animate="animate" exit="exit"
+              className="absolute inset-0 overflow-y-auto p-10"
+            >
+              <GradesView years={years} />
             </motion.div>
           )}
 
